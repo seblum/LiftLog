@@ -64,6 +64,6 @@ If they want to change a plan they're already running but haven't given you the 
 
 Don't rebuild their plan from a verbal description when they could just export it - the file has their real exercise names, rest times, and progressive overload settings, and anything you reconstruct will quietly differ.
 
-When you hand the edited file back, mention that importing it creates a _new_ plan rather than overwriting the old one, so they'll want to delete the original from `Plans` once they've imported the replacement. Their logged workout history isn't affected either way.
+When you hand the edited file back, mention that on LiftLog's import screen they can tap **Update existing plan** to overwrite the plan they exported in place, instead of **Add to my plans**, which creates a new one alongside the original (in which case they'd want to delete the original from `Plans` themselves). Their logged workout history isn't affected either way.
 
 There's a good chance that the user will give you a plan which is in a format you don't understand. There are multiple versions and you only know about one of them. Do your best to match their format but let them know this.

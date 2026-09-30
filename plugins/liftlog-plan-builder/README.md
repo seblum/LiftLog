@@ -35,7 +35,7 @@ When it's done, get the file onto your phone (AirDrop, email, or Files) and tap 
 
 You don't have to describe your current plan - send it. In LiftLog, open **Plans**, tap the `⋮` next to the plan and choose **Export to file**; the share sheet lets you save it to Files/Drive or mail it to yourself. Hand that `.liftlogplan` to Claude along with what you want changed, and you get the same plan back with the change made.
 
-Importing the result adds a _new_ plan rather than overwriting the old one, so delete the original once the replacement is in. Your workout history is stored separately and isn't affected.
+Importing the result opens LiftLog's import screen, where **Add to my plans** creates a new plan (delete the original once the replacement is in) and **Update existing plan** overwrites the one you picked in place. Your workout history is stored separately and isn't affected either way.
 
 ## What's in here
 

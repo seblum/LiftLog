@@ -43,7 +43,11 @@ The skill reads plans as happily as it writes them, so you can send it the one y
 
 Exporting means Claude sees your real exercise names, rest times, and progressive overload settings, so what comes back is your plan with the change made - not an approximation of it rebuilt from a description.
 
-Importing the result **adds a new plan**; it does not overwrite the original. Delete the old one from `Plans` once the replacement is in. Your logged workout history is kept separately and is untouched by either.
+On the import screen, **Add to my plans** creates a new plan, leaving the original untouched - delete
+the old one from `Plans` yourself once the replacement is in. **Update existing plan** instead lets you
+pick a plan from a list and overwrites it in place with the imported file, which is the better choice
+when you're re-importing an edited copy of a plan you're already running. Either way, your logged
+workout history is kept separately and is untouched.
 
 ## Generating a plan with another AI
 
