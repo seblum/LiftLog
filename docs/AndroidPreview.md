@@ -88,8 +88,20 @@ gh api repos/seblum/LiftLog/branches/main/protection
 
 Only a successful API response and the subsequent protection read confirm enforcement. Repository
 protection and workflow enablement are GitHub settings, not enforced by this Markdown file.
-In this personal Android copy, keep only **Personal Android** enabled; the inherited workflows include
-upstream store and container publishing and duplicate native builds that are outside this copy's scope.
+Only **Personal Android** is intended to run in this private copy; the other 16 inherited workflows
+are disabled, including upstream publishing and duplicate native builds.
+
+Actions uses a selected-action allowlist containing these exact references:
+
+- `actions/checkout@v6`
+- `actions/setup-node@v6`
+- `actions/setup-java@v5`
+- `gradle/actions/setup-gradle@v4`
+- `android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407`
+- `actions/upload-artifact@v7`
+
+When updating an action version or adding an action, update the repository's Actions allowlist too;
+otherwise GitHub will reject the workflow. Preserve these settings when recreating the repository.
 
 ## APK after merging to main
 
