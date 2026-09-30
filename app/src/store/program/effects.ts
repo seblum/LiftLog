@@ -23,6 +23,8 @@ import { LocalDate } from '@js-joda/core';
 import { toRecord } from '@/utils/reduce';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { TaskAbortError } from '@reduxjs/toolkit';
+import { applyFolderSyncRecord } from '@/store/folder-sync-actions';
+import { atomicWrites } from '@/db/atomic-writes';
 
 const builtInProgramsStorageKey = 'hasSavedDefaultPlans2';
 export function applyProgramEffects(addEffect: AddEffectFn) {
@@ -30,7 +32,13 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
     initializeProgramStateSlice,
     async (
       _,
-      { getState, cancelActiveListeners, dispatch, extra: { keyValueStore, logger, db }, throwIfCancelled },
+      {
+        getState,
+        cancelActiveListeners,
+        dispatch,
+        extra: { keyValueStore, logger, db, trainingDataQueue },
+        throwIfCancelled,
+      },
     ) => {
       const start = performance.now();
       cancelActiveListeners();
@@ -58,7 +66,7 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
           }
           dispatch(savePlan({ programId: id, programBlueprint: program }));
         }
-        await persistPrograms(getState(), db, logger, throwIfCancelled);
+        await trainingDataQueue.run(() => persistPrograms(getState(), db, logger, throwIfCancelled));
         await keyValueStore.setItem(builtInProgramsStorageKey, 'true');
       }
       if (!activePlanId || !getState().program.savedPrograms[activePlanId]) {
@@ -77,17 +85,26 @@ export function applyProgramEffects(addEffect: AddEffectFn) {
   addEffect(
     undefined,
     async (
-      _,
-      { stateBeforeReduce, stateAfterReduce, extra: { db, logger }, throwIfCancelled, cancelActiveListeners },
+      action,
+      {
+        stateBeforeReduce,
+        stateAfterReduce,
+        getState,
+        extra: { db, logger, trainingDataQueue },
+        throwIfCancelled,
+        cancelActiveListeners,
+      },
     ) => {
-      cancelActiveListeners();
+      // Incoming records and their baseline are already written in the sync repository's transaction.
+      if (applyFolderSyncRecord.match(action)) return;
       const start = performance.now();
       const shouldPersist =
         stateAfterReduce.program.isHydrated &&
         (stateAfterReduce.program.activePlanId !== stateBeforeReduce.program.activePlanId ||
           stateAfterReduce.program.savedPrograms !== stateBeforeReduce.program.savedPrograms);
       if (shouldPersist) {
-        await persistPrograms(stateAfterReduce, db, logger, throwIfCancelled);
+        cancelActiveListeners();
+        await trainingDataQueue.run(() => persistPrograms(getState(), db, logger, throwIfCancelled));
         const end = performance.now();
         logger.info(`Persist program state effect took ${(end - start).toFixed(2)} ms`);
       }
@@ -132,18 +149,17 @@ async function persistPrograms(
   throwIfCancelled: () => void,
 ) {
   try {
-    await db.transaction(async (tx) => {
-      throwIfCancelled();
-      await tx.delete(programsSchema);
-      await tx.insert(programsSchema).values(
-        Object.entries(stateAfterReduce.program.savedPrograms).map(([key, program]) => ({
-          id: key,
-          active: key === stateAfterReduce.program.activePlanId,
-          payload: program.toJSON(),
-        })),
-      );
-      throwIfCancelled();
-    });
+    const programs = Object.entries(stateAfterReduce.program.savedPrograms).map(([key, program]) => ({
+      id: key,
+      active: key === stateAfterReduce.program.activePlanId,
+      payload: program.toJSON(),
+    }));
+    await atomicWrites(db, (tx) => [
+      throwIfCancelled,
+      () => tx.delete(programsSchema).run(),
+      () => (programs.length ? tx.insert(programsSchema).values(programs).run() : undefined),
+      throwIfCancelled,
+    ]);
   } catch (e) {
     if (e instanceof TaskAbortError) {
       return;

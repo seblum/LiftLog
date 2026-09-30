@@ -15,6 +15,7 @@
     "scripts",
     ".expo",
     "expo-env.d.ts",
+    "app.config.js",
     "metro.config.js",
     "babel.config.js",
     "vitest.config.ts",

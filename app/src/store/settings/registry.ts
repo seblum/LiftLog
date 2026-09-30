@@ -96,6 +96,7 @@ export const preferenceRegistry = {
   }),
 
   backupIncludeFeedAccount: pref({ default: false, codec: boolCodec }),
+  folderSyncUri: pref<string | undefined>({ default: '', codec: stringCodec }),
 
   // Fully bespoke: composed from two keys + settings, persisted only on success.
   lastBackup: pref<RemoteData<LastBackup, string>>({

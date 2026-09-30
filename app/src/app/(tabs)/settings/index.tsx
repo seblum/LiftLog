@@ -72,6 +72,15 @@ export default function SettingsPageIndex() {
 
       <SegmentedGroup>
         <SegmentedListLink label={t('backends.title')} icon={'dns'} onPress={() => push('/settings/backends')} />
+        {Platform.OS === 'android' ? (
+          <SegmentedListLink
+            testID="folderSync"
+            label={t('folder_sync.title')}
+            supportingText={t('folder_sync.settings.subtitle')}
+            icon={'reload'}
+            onPress={() => push('/settings/folder-sync')}
+          />
+        ) : undefined}
         <SegmentedListLink
           label={t('backup.export_backup_restore.title')}
           icon={'settingsBackupRestore'}

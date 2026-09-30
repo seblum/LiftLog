@@ -4,6 +4,7 @@ import { RemoteData } from '@/models/remote';
 import { EmptySession, Session } from '@/models/session-models';
 import { createAction, createSelector, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import Enumerable from 'linq';
+import { applyFolderSyncRecord } from '@/store/folder-sync-actions';
 
 /** Addresses one workout of one plan, which is how the workout editor screens identify what they edit. */
 export type ProgramSessionLocation = {
@@ -197,6 +198,19 @@ const programSlice = createSlice({
     setPendingPlanDiff(state, action: PayloadAction<PlanDiff | undefined>) {
       state.pendingPlanDiff = action.payload;
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(applyFolderSyncRecord, (state, { payload: record }) => {
+      if (record.kind !== 'program') return;
+      if (record.deleted) {
+        delete state.savedPrograms[record.id];
+        if (state.activePlanId === record.id) {
+          state.activePlanId = Object.keys(state.savedPrograms)[0]!;
+        }
+      } else {
+        state.savedPrograms[record.id] = ProgramBlueprint.fromJSON(record.data);
+      }
+    });
   },
   selectors: {
     selectActiveProgram: (state: ProgramState) => state.savedPrograms[state.activePlanId]!,

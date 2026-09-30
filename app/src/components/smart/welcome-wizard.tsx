@@ -26,7 +26,7 @@ import { getDateOnDay } from '@/utils/format-date';
 import { DayOfWeek } from '@js-joda/core';
 import { useTranslate } from '@tolgee/react';
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { Portal, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useDispatch } from 'react-redux';
@@ -34,6 +34,7 @@ import { openUrl } from '@/utils/open-url';
 import { useFormatDate } from '@/hooks/useFormatDate';
 import { requestPermissionsAsync } from 'expo-notifications';
 import { HealthExportSwitch, useCanExportHealth } from './health-export-switch';
+import { FolderSyncSetup } from './folder-sync-setup';
 
 export function WelcomeWizard() {
   const notificationsEnabled = useAppSelector((x) => x.settings.restNotifications);
@@ -88,7 +89,7 @@ export function WelcomeWizard() {
     [t],
   );
 
-  const totalPages = 3;
+  const totalPages = Platform.OS === 'android' ? 4 : 3;
 
   const handleNext = async () => {
     if (currentPage < totalPages - 1) {
@@ -231,6 +232,26 @@ export function WelcomeWizard() {
     </View>
   );
 
+  const renderFolderSyncPage = () => (
+    <ScrollView contentContainerStyle={{ paddingTop: spacing.pageHorizontalMargin, paddingBottom: spacing[4] }}>
+      <View style={styles.headerSection}>
+        <Text variant="headlineMedium" style={styles.pageTitle}>
+          {t('folder_sync.title')}
+        </Text>
+        <Text variant="bodyLarge" style={styles.pageSubtitle}>
+          {t('folder_sync.onboarding.subtitle')}
+        </Text>
+      </View>
+      <View style={[styles.settingsSection, { flex: undefined }]}>
+        <FolderSyncSetup />
+        <Text variant="bodyMedium">{t('folder_sync.automatic.explanation')}</Text>
+        <Text variant="bodyMedium" style={styles.sectionDescription}>
+          {t('folder_sync.onboarding.optional')}
+        </Text>
+      </View>
+    </ScrollView>
+  );
+
   return (
     !welcomeWizardCompleted && (
       <Portal>
@@ -240,6 +261,7 @@ export function WelcomeWizard() {
               {renderCrashReportsPage()}
               {renderLocalizationPage()}
               {renderNotificationsAndFeedPage()}
+              {Platform.OS === 'android' ? renderFolderSyncPage() : undefined}
             </Pager>
 
             <View style={styles.footer}>

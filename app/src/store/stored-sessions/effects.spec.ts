@@ -7,6 +7,8 @@ import { eq } from 'drizzle-orm';
 import { DatabaseMigrationService } from '@/services/database-migration-service';
 import { applyStoredSessionsEffects } from '@/store/stored-sessions/effects';
 import {
+  storedSessionsReducer,
+  deleteStoredSession,
   initializeStoredSessionsStateSlice,
   putStoredSession,
   sessionFinished,
@@ -15,6 +17,8 @@ import {
   upsertExercises,
   upsertStoredSessions,
 } from '@/store/stored-sessions';
+import { combineReducers } from '@reduxjs/toolkit';
+import { applyFolderSyncRecord } from '@/store/folder-sync-actions';
 import { addUnpublishedSessionId } from '@/store/feed';
 import { setStatsIsDirty } from '@/store/stats';
 import { createAddEffectTestBed } from '@/utils/__test__/add-effect-testbed';
@@ -64,6 +68,7 @@ describe('stored-sessions effects', () => {
 
   function bed(options: { keyValueStore?: ReturnType<typeof makeKvStore>; state?: Partial<RootState> }) {
     const testBed = createAddEffectTestBed({
+      reducer: combineReducers({ storedSessions: storedSessionsReducer, settings: (state = {}) => state }),
       initialState: {
         settings: { isHydrated: true, preferredLanguage: 'en', exportToHealthAggregator: false },
         storedSessions: { sessions: {}, activeSessionId: undefined },
@@ -79,6 +84,47 @@ describe('stored-sessions effects', () => {
     applyStoredSessionsEffects(testBed.addEffect);
     return testBed;
   }
+
+  it('reads session content after preceding sync work finishes, so queued older edits cannot overwrite imports', async () => {
+    const original = Session.freeformSession(LocalDate.of(2026, 4, 10), undefined);
+    const incoming = original.withName('Edited on computer');
+    const testBed = bed({});
+    const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
+    const importWork = testBed.mockServices.trainingDataQueue.run(async () => {
+      await barrier;
+      testBed.dispatch(
+        applyFolderSyncRecord({
+          version: 1,
+          kind: 'session',
+          id: incoming.id,
+          deleted: false,
+          data: incoming.toJSON(),
+        }),
+      );
+    });
+    const localWrite = testBed.dispatchHandled(putStoredSession(original));
+    release();
+    await Promise.all([importWork, localWrite]);
+    const [row] = await db.select().from(sessionsSchema).where(eq(sessionsSchema.id, incoming.id));
+    expect(Session.fromJSON(row!.payload as ReturnType<Session['toJSON']>).blueprint.name).toBe('Edited on computer');
+  });
+
+  it('does not let a queued deletion remove a record restored by earlier sync work', async () => {
+    const session = Session.freeformSession(LocalDate.of(2026, 4, 10), undefined);
+    const testBed = bed({});
+    await testBed.dispatchHandled(putStoredSession(session));
+    const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
+    const importWork = testBed.mockServices.trainingDataQueue.run(async () => {
+      await barrier;
+      testBed.dispatch(
+        applyFolderSyncRecord({ version: 1, kind: 'session', id: session.id, deleted: false, data: session.toJSON() }),
+      );
+    });
+    const deletion = testBed.dispatchHandled(deleteStoredSession(session.id));
+    release();
+    await Promise.all([importWork, deletion]);
+    expect(await db.select().from(sessionsSchema).where(eq(sessionsSchema.id, session.id))).toHaveLength(1);
+  });
 
   describe('the active session in SQLite', () => {
     it('persists content without ever claiming the active flag', async () => {

@@ -5,8 +5,9 @@ import { createAction, createSelector, createSlice, PayloadAction, WritableDraft
 import { shallowEqual } from 'react-redux';
 import Enumerable from 'linq';
 import { TemporalComparer } from '@/models/comparers';
-import { ExerciseDescriptor } from '@/models/exercise-models';
+import { ExerciseDescriptor, fromExerciseDescriptorJSON } from '@/models/exercise-models';
 import { findPersonalRecords } from '@/store/stats/personal-records';
+import { applyFolderSyncRecord } from '@/store/folder-sync-actions';
 
 interface StoredSessionState {
   isHydrated: boolean;
@@ -71,6 +72,7 @@ const storedSessionsSlice = createSlice({
     setStoredSessions(state, action: PayloadAction<Record<string, Session>>) {
       state.sessions = action.payload;
       state.latestExercises = {};
+      state.earliestSession = undefined;
       Object.values(action.payload).forEach((session) => {
         updateDerivatives(state, session);
       });
@@ -163,6 +165,27 @@ const storedSessionsSlice = createSlice({
     setFilteredExerciseIds(state, action: PayloadAction<string[]>) {
       state.filteredExerciseIds = action.payload;
     },
+  },
+
+  extraReducers: (builder) => {
+    builder.addCase(applyFolderSyncRecord, (state, { payload: record }) => {
+      if (record.kind === 'session') {
+        if (record.id === state.activeSessionId) return;
+        if (record.deleted) delete state.sessions[record.id];
+        else state.sessions[record.id] = Session.fromJSON(record.data);
+        // A correction can retain its completion timestamp, move to another date, or remove an
+        // exercise. Rebuild these caches rather than only accepting strictly newer performances.
+        state.latestExercises = {};
+        state.earliestSession = undefined;
+        Object.values(state.sessions).forEach((session) => updateDerivatives(state, session as Session));
+      } else if (record.kind === 'exercise') {
+        if (record.deleted) delete state.savedExercises[record.id];
+        else state.savedExercises[record.id] = fromExerciseDescriptorJSON(record.data);
+      } else if (record.kind === 'exercise-visibility') {
+        state.hiddenBuiltInIds = state.hiddenBuiltInIds.filter((id) => id !== record.id);
+        if (!record.deleted && record.data.hidden) state.hiddenBuiltInIds.push(record.id);
+      }
+    });
   },
 
   selectors: {
