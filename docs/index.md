@@ -37,7 +37,7 @@ work to find the docs relevant to your area, and update it whenever you add, rem
 
 - [AndroidPreview.md](./AndroidPreview.md) — build and preview a separate personal Android APK locally,
   with signing guidance, pull requests, the private branch-protection plan requirement, and APK
-  artifacts built after merging.
+  artifacts built after merging or manually from a branch.
 - [SelfHosting.md](./SelfHosting.md) — quickstart for running your own backend: a copy-paste Docker
   Compose file, how to point the app at it, and the environment variables that switch on the feed,
   remote backup, and AI planner. Pairs with the [backend README](../backend/README.md).

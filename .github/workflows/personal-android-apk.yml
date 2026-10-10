@@ -51,13 +51,23 @@ jobs:
   build:
     name: Build personal preview APK
     needs: validate
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=2048
     steps:
       - uses: actions/checkout@v6
+
+      - name: Free disk space for native compilation
+        run: |
+          df -h .
+          if [[ "$RUNNER_ENVIRONMENT" == "github-hosted" && "$RUNNER_OS" == "Linux" ]]; then
+            # This Android-only job does not use the runner's other large toolchains.
+            sudo rm -rf /usr/share/dotnet /usr/local/.ghcup \
+              /usr/share/swift /opt/hostedtoolcache/CodeQL
+          fi
+          df -h .
 
       - uses: actions/setup-node@v6
         with:
@@ -82,15 +92,23 @@ jobs:
 
       - name: Build standalone preview APK
         run: |
+          df -h .
           bash scripts/build-personal-apk.sh \
             "-PBUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" \
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pkotlin.compiler.execution.strategy=in-process \
+            --no-build-cache \
             --no-parallel \
             --no-daemon
         env:
           LIFTLOG_ANDROID_ARCHITECTURES: arm64-v8a,x86_64
           LIFTLOG_GRADLE_WORKERS: "2"
+
+      - name: Report remaining disk space
+        if: always()
+        run: |
+          df -h .
+          df -i .
 
       - name: Record build provenance and checksum
         run: |
