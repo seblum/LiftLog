@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   selectHasUnseenWhatsNew,
   selectUnseenWhatsNew,
@@ -9,6 +9,9 @@ import programReducer from '@/store/program';
 import { backendsReducer } from '@/store/backends';
 import { latestWhatsNewId, whatsNewEntries } from '@/models/whats-new';
 import { RootState } from '@/store';
+import { Platform } from 'react-native';
+
+vi.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 
 // Conditions read whatever slice their feature lives in, so every slice they can reach is built.
 const stateWith = (settings: Partial<ReturnType<typeof settingsReducer>>) =>
@@ -41,6 +44,21 @@ describe('whats-new selectors', () => {
     const disabled = stateWith({ lastSeenWhatsNewId: 0, exportToHealthAggregator: false });
     expect(selectUnseenWhatsNew(enabled).length).toBeLessThan(selectUnseenWhatsNew(disabled).length);
     expect(selectUnseenWhatsNew(enabled).every((e) => e.condition?.(enabled) ?? true)).toBe(true);
+  });
+
+  it('only offers folder sync on Android until a folder is connected', () => {
+    const disconnected = stateWith({ lastSeenWhatsNewId: 0, folderSyncUri: '' });
+    const connected = stateWith({ lastSeenWhatsNewId: 0, folderSyncUri: 'content://shared-folder' });
+    const isFolderSync = (entry: (typeof whatsNewEntries)[number]) => entry.titleKey === 'whats_new.folder_sync.title';
+    expect(selectUnseenWhatsNew(disconnected).some(isFolderSync)).toBe(true);
+    expect(selectUnseenWhatsNew(connected).some(isFolderSync)).toBe(false);
+    const originalOS = Platform.OS;
+    try {
+      Platform.OS = 'ios';
+      expect(selectUnseenWhatsNew(disconnected).some(isFolderSync)).toBe(false);
+    } finally {
+      Platform.OS = originalOS;
+    }
   });
 
   it('acknowledging the latest id via the reducer clears the flag', () => {

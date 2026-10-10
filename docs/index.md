@@ -28,11 +28,16 @@ work to find the docs relevant to your area, and update it whenever you add, rem
   are included. Explicitly _not_ a backup mechanism; LiftLog cannot read these files back.
 - [CsvImport.md](./CsvImport.md) — user guide for Import from other apps (FitNotes-style and
   StrongLifts-style CSV); contributor notes at the end. Separate from plaintext export.
+- [FolderSync.md](./FolderSync.md) — Android bidirectional folder sync for Syncthing: setup, editable
+  JSON records, conflict/deletion behavior, foreground timing, and implementation notes.
 - [RemoteBackup.md](./RemoteBackup.md) — the automatic remote backup: the app-side settings, the HTTPS
   requirement, and the contract a self-hosted backup endpoint must satisfy.
 
 ## Running it yourself
 
+- [AndroidPreview.md](./AndroidPreview.md) — build and preview a separate personal Android APK locally,
+  with signing guidance, pull requests, the private branch-protection plan requirement, and APK
+  artifacts built after merging.
 - [SelfHosting.md](./SelfHosting.md) — quickstart for running your own backend: a copy-paste Docker
   Compose file, how to point the app at it, and the environment variables that switch on the feed,
   remote backup, and AI planner. Pairs with the [backend README](../backend/README.md).
@@ -43,6 +48,6 @@ work to find the docs relevant to your area, and update it whenever you add, rem
 ## Generated
 
 - [schemas/](./schemas) - JSON schemas generated from the app's models: `ai-plan/`,
-  `program-blueprint/`, `workout-worker/`. Regenerate with `npm run json-schema` from `app/`; never
+  `program-blueprint/`, `workout-worker/`, `folder-sync/`. Regenerate with `npm run json-schema` from `app/`; never
   hand-edit.
 - [img/](./img) - images referenced by the docs above.

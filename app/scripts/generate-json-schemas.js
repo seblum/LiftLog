@@ -35,6 +35,13 @@ createSingleSchema(
   'ProgramBlueprint',
 );
 
+createSingleSchema(
+  join(modelsDir, 'folder-sync.ts'),
+  [join(docsSchemasPath, 'folder-sync/SyncRecord.json'), join(modelsDir, 'generated/folder-sync.schema.json')],
+  'SyncRecord',
+  'SyncRecord',
+);
+
 /**
  * Write a single self-contained JSON Schema file rooted at `rootType`.
  * The root definition's body becomes the top-level schema; every other
@@ -44,8 +51,8 @@ createSingleSchema(
  * `outputPath` may be a single path or an array of paths to write the same
  * schema to.
  */
-function createSingleSchema(inputFile, outputPath, rootType) {
-  const schema = buildSchema(inputFile);
+function createSingleSchema(inputFile, outputPath, rootType, inputType = '*') {
+  const schema = buildSchema(inputFile, inputType);
   const { definitions } = schema;
 
   if (!definitions || !definitions[rootType]) {
@@ -133,12 +140,12 @@ function createSplitSchemas(inputFile, outputDir) {
  * Shared logic: compile TypeScript -> JSON Schema, then apply the
  * FooJSON / Branded<...> rename + collapse transforms.
  */
-function buildSchema(inputFile) {
+function buildSchema(inputFile, inputType = '*') {
   /** @type {import('ts-json-schema-generator/dist/src/Config').Config} */
   const config = {
     path: inputFile,
     tsconfig: join(__dirname, '../tsconfig.json'),
-    type: '*',
+    type: inputType,
     additionalProperties: true,
     discriminatorType: 'open-api',
     skipTypeCheck: true,

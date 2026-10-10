@@ -20,6 +20,16 @@ export function applyStatsEffects(addEffect: AddEffectFn) {
     dispatch(setOverallStats(RemoteData.loading()));
     await sleep(200);
     try {
+      // Check before any snapshot-dependent early return, including an initially empty history.
+      const current = getState();
+      if (
+        current.storedSessions.sessions !== state.storedSessions.sessions ||
+        current.stats.overallViewTime !== state.stats.overallViewTime
+      ) {
+        dispatch(setOverallStats(RemoteData.notAsked()));
+        dispatch(fetchOverallStats());
+        return;
+      }
       let timeframe = state.stats.overallViewTime;
       if (timeframe === 'all-time') {
         if (!state.storedSessions.earliestSession) {

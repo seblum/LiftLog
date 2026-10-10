@@ -12,6 +12,7 @@ import StackWithHeader from '@/components/layout/stack-with-header';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { requireOptionalNativeModule } from 'expo';
+import { FolderSyncManager } from '@/components/smart/folder-sync-manager';
 
 install();
 
@@ -39,6 +40,7 @@ export default function RootLayout() {
                 <SnackbarProvider>
                   {Platform.OS === 'android' && <StatusBar style="auto" />}
                   <PlanImportGate />
+                  <FolderSyncManager />
                   <Layout />
                 </SnackbarProvider>
               </AppStateProvider>

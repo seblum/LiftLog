@@ -92,6 +92,7 @@ export const {
   setCrashReportsEnabled,
   setWelcomeWizardCompleted,
   setBackupIncludeFeedAccount,
+  setFolderSyncUri,
   setLastBackup,
   setColorSchemeSeed,
   setFirstDayOfWeek,

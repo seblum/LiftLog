@@ -24,12 +24,21 @@ import { DatabaseMigrationService } from './database-migration-service';
 import { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { SQLiteDatabase } from 'expo-sqlite';
 import { DatabaseImportService } from '@/services/database-import-service';
+import { TrainingDataQueue } from '@/services/training-data-queue';
+import { FolderSyncService } from '@/services/folder-sync-service';
+import { AppFolderSyncRepository } from '@/services/folder-sync/repository';
+import { AndroidSyncDirectory } from '@/services/folder-sync/directory';
 
 export type Services = ReturnType<typeof createServices>;
 
 export function createServices(store: Store<RootState>, db: ExpoSQLiteDatabase, expoDb: SQLiteDatabase) {
   const logger = new Logger();
   const keyValueStore = new KeyValueStore();
+  const trainingDataQueue = new TrainingDataQueue();
+  const folderSyncService = new FolderSyncService(
+    new AppFolderSyncRepository(store, db, keyValueStore, trainingDataQueue),
+    { pick: () => AndroidSyncDirectory.pick(), open: (uri) => new AndroidSyncDirectory(uri) },
+  );
   const progressRepository = new ProgressRepository(store.getState);
   const sessionService = new SessionService(progressRepository, store.getState);
   const notificationService = new NotificationService(store.getState, store.dispatch);
@@ -55,6 +64,8 @@ export function createServices(store: Store<RootState>, db: ExpoSQLiteDatabase, 
   return {
     logger,
     keyValueStore,
+    trainingDataQueue,
+    folderSyncService,
     progressRepository,
     sessionService,
     notificationService,

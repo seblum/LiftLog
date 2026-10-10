@@ -79,13 +79,15 @@ export function applySettingsEffects(addEffect: AddEffectFn) {
       dispatch(setProToken(proToken));
 
       if (!__DEV__) {
-        if (Platform.OS === 'ios') {
+        const appleApiKey: unknown = process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY;
+        const googleApiKey: unknown = process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY;
+        if (Platform.OS === 'ios' && typeof appleApiKey === 'string' && appleApiKey) {
           Purchases.configure({
-            apiKey: process.env.EXPO_PUBLIC_REVENUECAT_APPLE_API_KEY!,
+            apiKey: appleApiKey,
           });
-        } else if (Platform.OS === 'android') {
+        } else if (Platform.OS === 'android' && typeof googleApiKey === 'string' && googleApiKey) {
           Purchases.configure({
-            apiKey: process.env.EXPO_PUBLIC_REVENUECAT_GOOGLE_API_KEY!,
+            apiKey: googleApiKey,
           });
         }
       }

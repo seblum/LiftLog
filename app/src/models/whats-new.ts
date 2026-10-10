@@ -2,6 +2,7 @@ import { AppIconSource } from '@/components/presentation/foundation/ms-icon-sour
 import type { RootState } from '@/store';
 import { TranslationKey } from '@tolgee/react';
 import { Href } from 'expo-router';
+import { Platform } from 'react-native';
 
 export interface WhatsNewEntry {
   id: number;
@@ -51,6 +52,17 @@ export const whatsNewEntries: WhatsNewEntry[] = [
       route: '/settings/backends',
     },
     condition: (state) => state.backends.backends.length === 0,
+  },
+  {
+    id: 4,
+    icon: 'reload',
+    titleKey: 'whats_new.folder_sync.title',
+    bodyKey: 'whats_new.folder_sync.body',
+    cta: {
+      labelKey: 'whats_new.folder_sync.cta',
+      route: '/settings/folder-sync',
+    },
+    condition: (state) => Platform.OS === 'android' && !state.settings.folderSyncUri,
   },
 ];
 

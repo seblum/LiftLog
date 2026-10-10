@@ -31,6 +31,7 @@ import { diffSessionBlueprints, EmptySessionBlueprintDiff } from '@/models/bluep
 import { programsSchema } from '@/db/schema';
 import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import type { RootState } from '@/store/store';
+import { applyFolderSyncRecord } from '@/store/folder-sync-actions';
 
 // ─── Real DB setup ────────────────────────────────────────────────────────────
 
@@ -240,6 +241,41 @@ describe('program effects', () => {
 
     beforeEach(async () => {
       db = await createTestDb();
+    });
+
+    it('persists the latest plan after a queued sync import instead of the old action snapshot', async () => {
+      const original = makeProgram('Phone version');
+      const incoming = makeProgram('Computer version');
+      const testBed = createAddEffectTestBed({
+        initialState: makeProgramState({ plan: original }, 'plan'),
+        services: { db },
+      });
+      applyProgramEffects(testBed.addEffect);
+      testBed.setStateBeforeReduce(makeProgramState({}, 'plan'));
+      const { promise: barrier, resolve: release } = Promise.withResolvers<void>();
+      const importWork = testBed.mockServices.trainingDataQueue.run(async () => {
+        await barrier;
+        testBed.setState(makeProgramState({ plan: incoming }, 'plan'));
+      });
+      const localWrite = testBed.dispatchHandled({ type: 'plan-edit' });
+      release();
+      await Promise.all([importWork, localWrite]);
+      const [row] = await db.select().from(programsSchema);
+      expect(row?.payload.name).toBe('Computer version');
+    });
+
+    it('does not write incoming sync records twice', async () => {
+      const incoming = makeProgram('Computer version');
+      const testBed = createAddEffectTestBed({
+        initialState: makeProgramState({ plan: incoming }, 'plan'),
+        services: { db },
+      });
+      applyProgramEffects(testBed.addEffect);
+      testBed.setStateBeforeReduce(makeProgramState({}, 'plan'));
+      await testBed.dispatchHandled(
+        applyFolderSyncRecord({ version: 1, kind: 'program', id: 'plan', deleted: false, data: incoming.toJSON() }),
+      );
+      expect(await db.select().from(programsSchema)).toHaveLength(0);
     });
 
     it('persists to DB when savedPrograms changes after hydration', async () => {

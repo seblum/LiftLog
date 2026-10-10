@@ -1,0 +1,114 @@
+name: Personal Android
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: app
+
+jobs:
+  validate:
+    # Keep this name stable: main's branch protection requires this check.
+    name: Validate personal Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Expo types
+        run: npx expo customize tsconfig.json
+
+      - name: Check types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npx vitest run --maxWorkers=2 --testTimeout=30000
+
+  build:
+    name: Build personal preview APK
+    needs: validate
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=2048
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build standalone preview APK
+        run: |
+          bash scripts/build-personal-apk.sh \
+            "-PBUILD_NUMBER=$((GITHUB_RUN_NUMBER + 100))" \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            --no-parallel \
+            --no-daemon
+        env:
+          LIFTLOG_ANDROID_ARCHITECTURES: arm64-v8a,x86_64
+          LIFTLOG_GRADLE_WORKERS: "2"
+
+      - name: Record build provenance and checksum
+        run: |
+          sha256sum ../artifacts/liftlog-sync-preview.apk > ../artifacts/SHA256SUMS.txt
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Commit: $GITHUB_SHA"
+            echo "Version code: $((GITHUB_RUN_NUMBER + 100))"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Attempt: $GITHUB_RUN_ATTEMPT"
+            echo 'App: LiftLog Sync (com.seblum.liftlog)'
+            echo 'Signing: development certificate; personal preview only'
+          } > ../artifacts/BUILD.txt
+
+      - name: Save APK for local review
+        uses: actions/upload-artifact@v7
+        with:
+          name: liftlog-sync-preview-development-signed-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            artifacts/liftlog-sync-preview.apk
+            artifacts/SHA256SUMS.txt
+            artifacts/BUILD.txt
+          if-no-files-found: error
+          retention-days: 30

@@ -5,6 +5,7 @@ import { expect, onTestFailed, vi } from 'vitest';
 import type { AddEffectFn, RootState } from '@/store/store';
 import type { Services } from '@/services';
 import type { ActionCreatorWithPayload, Reducer, UnknownAction } from '@reduxjs/toolkit';
+import { TrainingDataQueue } from '@/services/training-data-queue';
 
 type DeepPartial<T> = T extends object
   ? {
@@ -46,6 +47,7 @@ export function createAddEffectTestBed(options?: {
   let stateBeforeReduce: DeepPartial<RootState> = state;
   const logs: { level: string; args: unknown[] }[] = [];
   const mockServices: Services = {
+    trainingDataQueue: new TrainingDataQueue(),
     logger: {
       error: vi.fn((...args) => logs.push({ level: 'error', args })),
       warn: vi.fn((...args) => logs.push({ level: 'warn', args })),

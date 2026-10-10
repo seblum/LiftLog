@@ -14,6 +14,18 @@ import {
 import { BackendFeature, BackendKind } from '@/models/backend';
 import { sql } from 'drizzle-orm';
 import { check, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { SyncRecord } from '@/models/folder-sync';
+
+// Baselines belong to a specific selected folder. A different folder starts a fresh reconciliation.
+export const folderSyncBaselinesSchema = sqliteTable(
+  'folder_sync_baseline',
+  {
+    folderUri: text().notNull(),
+    path: text().notNull(),
+    payload: text('payload', { mode: 'json' }).$type<SyncRecord>().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.folderUri, table.path] })],
+);
 
 export const sessionsSchema = sqliteTable(
   'session',

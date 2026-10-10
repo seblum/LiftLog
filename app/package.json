@@ -18,7 +18,7 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "postinstall": "npm run patch-package",
-    "json-schema": "node ./scripts/generate-json-schemas.js && node ./scripts/build-plan-validator.mjs",
+    "json-schema": "node ./scripts/generate-json-schemas.js && node ./scripts/build-plan-validator.mjs && node ./scripts/build-folder-sync-validator.mjs",
     "test": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsgo --noEmit",
