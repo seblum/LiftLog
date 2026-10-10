@@ -108,7 +108,11 @@ otherwise GitHub will reject the workflow. Preserve these settings when recreati
 Merging a pull request into `main` automatically runs the **Personal Android** workflow. Once
 validation passes, it builds the standalone APK for ARM64 phones and Intel emulators. The build has
 a 90-minute timeout, two Gradle workers, and bounded JVM/Node heaps for a private repository's
-standard GitHub-hosted runner. New workflow runs use `100 + github.run_number` for Android's
+standard GitHub-hosted runner. Before installing build dependencies, the job removes unused .NET,
+Haskell, Swift, and CodeQL toolchains from the disposable hosted runner to make room for native
+compilation. It preserves Android, Java, and Node tools, reports available disk space, and disables
+Gradle's task-output build cache to avoid storing duplicate native outputs; dependency caching remains
+enabled. New workflow runs use `100 + github.run_number` for Android's
 `BUILD_NUMBER`/version code. Retrying the same run reuses its version code.
 
 In GitHub, open **Actions → Personal Android → the successful main run → Artifacts** and download
@@ -118,9 +122,10 @@ checksum, and `BUILD.txt` identifying the source commit and version code. Artifa
 30 days and require access to this private repository; download any build you want to keep longer.
 After extraction, verify it with `shasum -a 256 liftlog-sync-preview.apk` against `SHA256SUMS.txt`.
 
-For a manual rebuild, choose **Run workflow** with the **main** branch selected. Manual runs on other
-branches run validation only; pull requests also run validation only. This avoids building an APK
-for an unmerged branch. The workflow never creates a GitHub release or publishes to the Play Store.
+For a manual rebuild, choose **Run workflow** and select the branch to build. Manual runs validate
+and build that exact branch, so CI repairs can be tested through APK generation before merging.
+Pull requests run validation only; automatic APK builds still run only after changes reach `main`.
+The workflow never creates a GitHub release or publishes to the Play Store.
 It uses the existing release build's fallback development certificate and requires no upstream
 signing or store credentials. The app retains the separate **LiftLog Sync** name and
 `com.seblum.liftlog` package ID.
