@@ -73,6 +73,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        with:
+          # The action installs cmdline-tools itself; the legacy tools package is unavailable.
+          packages: platform-tools
 
       - name: Install dependencies
         run: npm ci
