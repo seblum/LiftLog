@@ -6,12 +6,18 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      build_apk:
+        description: Build the APK (disable for Release Please PR validation)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: personal-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  # Every main commit needs its own APK; later pushes must not replace a queued release build.
+  group: personal-android-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
@@ -26,6 +32,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+
+      - name: Test release publication safeguards
+        working-directory: .
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
 
       - uses: actions/setup-node@v6
         with:
@@ -51,11 +61,13 @@ jobs:
   build:
     name: Build personal preview APK
     needs: validate
-    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && github.event_name == 'push')
+    if: (github.event_name == 'workflow_dispatch' && inputs.build_apk) || (github.ref == 'refs/heads/main' && github.event_name == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
       NODE_OPTIONS: --max-old-space-size=2048
+    outputs:
+      artifact_name: ${{ steps.metadata.outputs.artifact_name }}
     steps:
       - uses: actions/checkout@v6
 
@@ -111,11 +123,14 @@ jobs:
           df -i .
 
       - name: Record build provenance and checksum
+        id: metadata
         run: |
-          sha256sum ../artifacts/liftlog-sync-preview.apk > ../artifacts/SHA256SUMS.txt
+          echo "artifact_name=liftlog-sync-preview-development-signed-$GITHUB_RUN_NUMBER-$GITHUB_RUN_ATTEMPT" >> "$GITHUB_OUTPUT"
+          (cd ../artifacts && sha256sum liftlog-sync-preview.apk > SHA256SUMS.txt)
           {
             echo "Repository: $GITHUB_REPOSITORY"
             echo "Commit: $GITHUB_SHA"
+            echo "Version: $(cat personal-version.txt)"
             echo "Version code: $((GITHUB_RUN_NUMBER + 100))"
             echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "Attempt: $GITHUB_RUN_ATTEMPT"
@@ -126,10 +141,102 @@ jobs:
       - name: Save APK for local review
         uses: actions/upload-artifact@v7
         with:
-          name: liftlog-sync-preview-development-signed-${{ github.run_number }}-${{ github.run_attempt }}
+          name: ${{ steps.metadata.outputs.artifact_name }}
           path: |
             artifacts/liftlog-sync-preview.apk
             artifacts/SHA256SUMS.txt
             artifacts/BUILD.txt
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: Release Please and publish APK
+    needs: build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: personal-android-release
+      queue: max
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    defaults:
+      run:
+        working-directory: .
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Release Please reads remote main, not this checkout. Publication separately
+      # verifies the tag against the built SHA, including when recovering a draft.
+      - name: Maintain release PR and prepare draft release
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        with:
+          target-branch: main
+
+      # GITHUB_TOKEN-created PRs do not emit pull_request workflows. Explicit
+      # dispatch is supported and validates the generated branch without an APK build.
+      - name: Validate the Release Please PR
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          repo = os.environ['GH_REPO']
+          pages = json.loads(subprocess.check_output([
+              'gh', 'api', f'repos/{repo}/pulls?state=open&base=main&per_page=100',
+              '--paginate', '--slurp',
+          ], text=True))
+          for pr in (pr for page in pages for pr in page):
+              if (pr['head']['repo']['full_name'] != repo
+                  or not pr['head']['ref'].startswith('release-please--branches--main')
+                  or 'autorelease: pending' not in [label['name'] for label in pr['labels']]):
+                  continue
+              subprocess.run([
+                  'gh', 'workflow', 'run', 'personal-android-apk.yml',
+                  '--ref', pr['head']['ref'], '-f', 'build_apk=false',
+              ], check=True)
+          PY
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: artifacts
+          github-token: ${{ github.token }}
+          run-id: ${{ github.run_id }}
+
+      - name: Find the draft for this exact build
+        id: candidate
+        run: python3 .github/scripts/publish-personal-release.py prepare app/personal-version.txt artifacts
+
+      - uses: actions/setup-java@v5
+        if: steps.candidate.outputs.ready == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+        if: steps.candidate.outputs.ready == 'true'
+        with:
+          packages: build-tools;36.0.0
+
+      - name: Sign and verify the release APK
+        if: steps.candidate.outputs.ready == 'true'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.PERSONAL_ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PERSONAL_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.PERSONAL_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.PERSONAL_ANDROID_KEY_PASSWORD }}
+          ANDROID_CERT_SHA256: ${{ vars.PERSONAL_ANDROID_CERT_SHA256 }}
+        run: |
+          export APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          export AAPT2="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          bash .github/scripts/sign-personal-apk.sh artifacts
+
+      - name: Upload APK and publish the complete release
+        if: steps.candidate.outputs.ready == 'true'
+        run: python3 .github/scripts/publish-personal-release.py publish app/personal-version.txt artifacts

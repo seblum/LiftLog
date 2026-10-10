@@ -99,6 +99,8 @@ Actions uses a selected-action allowlist containing these exact references:
 - `gradle/actions/setup-gradle@v4`
 - `android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407`
 - `actions/upload-artifact@v7`
+- `actions/download-artifact@v8`
+- `googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071`
 
 When updating an action version or adding an action, update the repository's Actions allowlist too;
 otherwise GitHub will reject the workflow. Preserve these settings when recreating the repository.
@@ -124,18 +126,63 @@ After extraction, verify it with `shasum -a 256 liftlog-sync-preview.apk` agains
 
 For a manual rebuild, choose **Run workflow** and select the branch to build. Manual runs validate
 and build that exact branch, so CI repairs can be tested through APK generation before merging.
+Disable the **Build the APK** input to run validation only.
 Pull requests run validation only; automatic APK builds still run only after changes reach `main`.
-The workflow never creates a GitHub release or publishes to the Play Store.
-It uses the existing release build's fallback development certificate and requires no upstream
-signing or store credentials. The app retains the separate **LiftLog Sync** name and
-`com.seblum.liftlog` package ID.
+Preview artifacts use the existing release build's fallback development certificate. Publication
+adds a separate signing step after the build; no signing secrets are exposed to npm or Gradle.
+The app retains the separate **LiftLog Sync** name and `com.seblum.liftlog` package ID. Nothing is
+published to the Play Store.
 
-## Signing before publication
+## Automatic GitHub releases
 
-Preview APKs use a development signing key and are intended for evaluation. Before publishing
-installable releases, create and retain your own release keystore, securely back it up, and use it
-for every future version. Changing signing keys prevents updating an installed APK in place; export
-your data before replacing a preview installation with a differently signed release.
+After a successful main build, **Release Please and publish APK** maintains a release PR using
+Conventional Commit messages (`fix: ...`, `feat: ...`, or `feat!: ...` for breaking changes). Use those
+prefixes in squash-merge titles. Release Please updates `app/personal-version.txt`,
+`CHANGELOG.personal.md`, and `.release-please-manifest.json`. Personal releases use independent
+`liftlog-sync-v0.1.0`-style tags; the initial version is 0.1.0 and upstream tags are not reused.
+
+Merge the Release Please PR when ready to release. Its main build validates and compiles the new
+version, then the publication job prepares a draft, verifies the tag points to the exact built
+commit, signs the APK with the retained personal key, and verifies its certificate, package ID,
+version name, and version code. Only after uploading and verifying all asset checksums does it
+publish the GitHub Release. The assets are `liftlog-sync.apk`, `SHA256SUMS.txt`, and `BUILD.txt`.
+Releases remain private with the repository and do not expire after 30 days.
+
+The built-in `GITHUB_TOKEN` needs contents, issues, pull-request, and workflow-dispatch permissions
+in this job. Enable **Allow GitHub Actions to create and approve pull requests** in repository
+Actions settings; the workflow creates PRs but does not approve or merge them. No personal access
+token is needed for CI. Because bot-created PRs do not trigger ordinary PR workflows, the publication
+job explicitly dispatches validation for the release branch with APK building disabled.
+
+Publication is serialized with queued jobs retained; later pushes do not cancel queued main builds.
+A build can only publish its own commit, even if main advances while it
+runs. Feature-branch builds never publish. To recover a failed upload or publication, rerun failed
+jobs in the original main run: the job uses the original build's artifact name, resumes the draft,
+and leaves already-published APKs unchanged. Rerunning an older release cannot make it Latest over
+a newer personal version. Do not delete a pending draft or move its tag to recover an upload.
+
+The release job requires these repository Actions secrets:
+
+- `PERSONAL_ANDROID_KEYSTORE_BASE64`: the retained PKCS#12/JKS keystore encoded as base64.
+- `PERSONAL_ANDROID_KEYSTORE_PASSWORD`: its store password.
+- `PERSONAL_ANDROID_KEY_ALIAS`: the signing key alias.
+- `PERSONAL_ANDROID_KEY_PASSWORD`: its key password.
+
+The repository variable `PERSONAL_ANDROID_CERT_SHA256` pins the expected signing certificate.
+The decoded keystore exists only in a temporary directory during signing and is deleted on exit.
+Missing credentials or a different signing certificate fail publication; there is no development-key
+fallback for GitHub Releases.
+
+The initial personal key and credentials are retained locally in the Git-ignored
+`artifacts/android-signing/` directory with owner-only permissions. Securely back up that directory
+outside this checkout: losing the signing key prevents in-place updates to installed releases.
+Never commit it or upload it as a workflow artifact. Only the named, signed release files are uploaded.
+
+Preview APKs use Expo's public development key. Export your data, uninstall the preview, install the
+first personal release, and restore the data once when switching keys. Future personal releases
+use the same retained key and increasing Android version codes, so they update in place.
+
+## Local release signing
 
 The existing Android signing plugin accepts Gradle properties `ANDROID_UPLOAD_STORE_FILE`,
 `ANDROID_UPLOAD_STORE_PASSWORD`, `ANDROID_UPLOAD_KEY_ALIAS`, and `ANDROID_UPLOAD_KEY_PASSWORD`.
